@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Reading List</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="app-container">
+        <header class="app-header">
+            <h1>My Reading List</h1>
+            <div class="header-actions">
+                <button id="addEntryBtn" class="btn btn-primary">+ Add New Entry</button>
+                <div class="storage-actions">
+                    <button id="saveBtn" class="btn btn-storage">Save</button>
+                    <button id="loadBtn" class="btn btn-storage">Load</button>
+                    <button id="clearBtn" class="btn btn-storage btn-danger">Clear</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="controls-bar">
+            <div class="filter-tabs">
+                <button class="filter-tab active" data-filter="all">All</button>
+                <button class="filter-tab" data-filter="not_started">Not Started</button>
+                <button class="filter-tab" data-filter="reading">Reading</button>
+                <button class="filter-tab" data-filter="finished">Finished</button>
+            </div>
+            <div class="sort-controls">
+                <label for="sortSelect">Sort:</label>
+                <select id="sortSelect">
+                    <option value="dateAdded-desc">Date Added (Newest)</option>
+                    <option value="dateAdded-asc">Date Added (Oldest)</option>
+                    <option value="title-asc">Title (A-Z)</option>
+                    <option value="title-desc">Title (Z-A)</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="entriesList" class="entries-list">
+            <p class="empty-state">No entries yet. Click "+ Add New Entry" to start your reading list!</p>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div id="modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Add New Entry</h2>
+                <button id="closeModalBtn" class="btn-close">&times;</button>
+            </div>
+            <form id="entryForm">
+                <div class="form-group">
+                    <label for="entryTitle">Title *</label>
+                    <input type="text" id="entryTitle" required placeholder="Enter title...">
+                </div>
+                <div class="form-group">
+                    <label>Type</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="entryType" value="novel" checked> Novel
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="entryType" value="comic"> Comic
+                        </label>
+                    </div>
+                </div>
+                <input type="hidden" id="editingId" value="">
+                <button type="submit" class="btn btn-primary" id="modalSubmitBtn">Add Entry</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
