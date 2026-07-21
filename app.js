@@ -139,8 +139,61 @@ function formatDate(isoString) {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function renderRecommendations() {
+    const container = document.getElementById('recommendations');
+    const messages = [];
+
+    const notStarted = entries.filter(e => e.status === 'not_started');
+    const reading = entries.filter(e => e.status === 'reading');
+    const finished = entries.filter(e => e.status === 'finished');
+    const noTags = notStarted.filter(e => e.interestTags.length === 0);
+    const noProgress = reading.filter(e => e.currentPage === null && e.currentChapter === null);
+    const noNotes = reading.filter(e => !e.readingNotes);
+    const noAfterthought = finished.filter(e => !e.afterthought);
+    const noRating = finished.filter(e => e.finalRating === null);
+
+    if (entries.length === 0) {
+        messages.push({ type: 'info', text: 'Your reading list is empty. Add your first entry to get started!' });
+    } else {
+        if (notStarted.length >= 5) {
+            messages.push({ type: 'warning', text: 'You have ' + notStarted.length + ' unread entries in your backlog. Time to pick one up!' });
+        }
+
+        if (noTags.length > 0) {
+            messages.push({ type: 'warning', text: noTags.length + ' unread ' + (noTags.length === 1 ? 'entry has' : 'entries have') + ' no interest tags. Add some so you remember why you picked them!' });
+        }
+
+        if (noProgress.length > 0) {
+            messages.push({ type: 'warning', text: noProgress.length + ' ' + (noProgress.length === 1 ? 'entry' : 'entries') + ' in progress have no page or chapter data. Update your progress!' });
+        }
+
+        if (noNotes.length > 0) {
+            messages.push({ type: 'info', text: 'You\'re reading ' + noNotes.length + ' ' + (noNotes.length === 1 ? 'title' : 'titles') + ' without notes. Jot down some thoughts!' });
+        }
+
+        if (noAfterthought.length > 0) {
+            messages.push({ type: 'info', text: noAfterthought.length + ' finished ' + (noAfterthought.length === 1 ? 'title' : 'titles') + ' have no afterthought. Share your final thoughts!' });
+        }
+
+        if (noRating.length > 0) {
+            messages.push({ type: 'info', text: noRating.length + ' finished ' + (noRating.length === 1 ? 'title' : 'titles') + ' has no rating. Give it a star rating!' });
+        }
+    }
+
+    if (messages.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = messages.map(function (msg) {
+        return '<div class="recommendation recommendation-' + msg.type + '">' + escapeHTML(msg.text) + '</div>';
+    }).join('');
+}
+
 function renderEntries() {
     const filtered = getFilteredAndSorted();
+
+    renderRecommendations();
 
     if (filtered.length === 0) {
         entriesList.innerHTML = `<p class="empty-state">${entries.length === 0
@@ -239,8 +292,22 @@ function renderNotStartedSection(entry) {
 }
 
 function renderReadingSection(entry) {
+    let percent = 0;
+    if (entry.currentChapter && entry.totalChapters) {
+        percent = Math.min((entry.currentChapter / entry.totalChapters) * 100, 100);
+    } else if (entry.currentPage && entry.totalPages) {
+        percent = Math.min((entry.currentPage / entry.totalPages) * 100, 100);
+    }
+    const percentText = percent > 0 ? Math.round(percent) + '%' : '';
+
     return `
         <div class="card-section">
+            <div class="progress-bar-container">
+                <div class="progress-bar-track">
+                    <div class="progress-bar-fill" style="width: ${percent}%"></div>
+                </div>
+                <span class="progress-bar-label">${percentText}</span>
+            </div>
             <div class="progress-section">
                 <div class="progress-group">
                     <label>Pages</label>
@@ -306,7 +373,7 @@ function attachCardListeners() {
             e.stopPropagation();
             const card = this.closest('.entry-card');
             const id = card.dataset.id;
-            const idx = parseInt(this.dataset.idx);
+            const idx = Number(this.dataset.idx);
             const entry = entries.find(e => e.id === id);
             if (!entry) return;
             entry.interestTags.splice(idx, 1);
@@ -414,7 +481,7 @@ function attachCardListeners() {
             const entry = entries.find(e => e.id === id);
             if (!entry) return;
 
-            entry[field] = this.value ? parseInt(this.value) : null;
+            entry[field] = this.value ? parseFloat(this.value) : null;
         });
     });
 
@@ -450,7 +517,7 @@ function attachCardListeners() {
     document.querySelectorAll('.star').forEach(star => {
         star.addEventListener('click', function () {
             const id = this.dataset.id;
-            const rating = parseInt(this.dataset.rating);
+            const rating = Number(this.dataset.rating);
             const entry = entries.find(e => e.id === id);
             if (!entry) return;
             entry.finalRating = entry.finalRating === rating ? null : rating;
