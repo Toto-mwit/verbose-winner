@@ -82,6 +82,15 @@ body {
     background-color: #fecaca;
 }
 
+.btn-sync {
+    background-color: #e0e7ff;
+    color: #4338ca;
+}
+
+.btn-sync:hover {
+    background-color: #c7d2fe;
+}
+
 /* Controls Bar */
 .controls-bar {
     display: flex;

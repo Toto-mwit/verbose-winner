@@ -1,5 +1,11 @@
 const STORAGE_KEY = 'readingList';
 
+const SUPABASE_URL = 'https://rxstziwzigntgjpydzjs.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_UOBxMr_zqx55akLKJ3d9Jw_IALUYJiO';
+const DB_TABLE = 'table';
+
+const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
 const PREDEFINED_TAGS = [
     { id: 'genre', label: 'I like the genre', detailPlaceholder: 'e.g. Fantasy, Sci-fi, Romance' },
     { id: 'premise', label: 'The premise is good', detailPlaceholder: '' },
@@ -30,7 +36,7 @@ const sortSelect = document.getElementById('sortSelect');
 const filterTabs = document.querySelectorAll('.filter-tab');
 
 function generateId() {
-    return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
+    return Math.floor(Date.now() * 1000) + Math.floor(Math.random() * 1000);
 }
 
 function createEntry(title, type) {
@@ -53,20 +59,133 @@ function createEntry(title, type) {
     };
 }
 
-function saveToStorage() {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-        showToast('List saved successfully!');
-    } catch (e) {
-        showToast('Failed to save: ' + e.message, true);
+function entryToRow(entry) {
+    return {
+        id: entry.id,
+        title: entry.title,
+        type: entry.type,
+        status: entry.status,
+        interest_tags: entry.interestTags || [],
+        current_page: entry.currentPage,
+        total_pages: entry.totalPages,
+        current_chapter: entry.currentChapter,
+        total_chapters: entry.totalChapters,
+        like: entry.like,
+        reading_notes: entry.readingNotes || '',
+        afterthought: entry.afterthought || '',
+        final_rating: entry.finalRating,
+        date_added: entry.dateAdded,
+        date_finished: entry.dateFinished
+    };
+}
+
+function rowToEntry(row) {
+    return {
+        id: row.id,
+        title: row.title,
+        type: row.type,
+        status: row.status,
+        dateAdded: row.date_added,
+        dateFinished: row.date_finished,
+        interestTags: row.interest_tags || [],
+        currentPage: row.current_page,
+        totalPages: row.total_pages,
+        currentChapter: row.current_chapter,
+        totalChapters: row.total_chapters,
+        like: row.like,
+        readingNotes: row.reading_notes || '',
+        afterthought: row.afterthought || '',
+        finalRating: row.final_rating
+    };
+}
+
+async function pushToSupabase() {
+    if (!supabaseClient) {
+        showToast('Supabase not loaded (offline?)', true);
+        return false;
     }
+    try {
+        const rows = entries.map(entryToRow);
+        if (rows.length > 0) {
+            const { error } = await supabaseClient.from(DB_TABLE).upsert(rows, { onConflict: 'id' });
+            if (error) throw error;
+        }
+        return true;
+    } catch (e) {
+        console.error('Supabase upsert failed:', e);
+        showToast('Database sync failed: ' + e.message, true);
+        return false;
+    }
+}
+
+async function loadFromSupabase() {
+    if (!supabaseClient) return false;
+    try {
+        const { data, error } = await supabaseClient.from(DB_TABLE).select('*');
+        if (error) throw error;
+        if (data && data.length > 0) {
+            entries = data.map(rowToEntry).map(normalizeEntry);
+            renderEntries();
+            showToast('Loaded ' + data.length + ' entries from database!');
+            return true;
+        }
+        return false;
+    } catch (e) {
+        console.error('Supabase load failed:', e);
+        showToast('Database load failed: ' + e.message, true);
+        return false;
+    }
+}
+
+async function clearSupabase() {
+    if (!supabaseClient) return false;
+    try {
+        const { error } = await supabaseClient.from(DB_TABLE).delete().gte('id', 0);
+        if (error) throw error;
+        return true;
+    } catch (e) {
+        console.error('Supabase clear failed:', e);
+        showToast('Database clear failed: ' + e.message, true);
+        return false;
+    }
+}
+
+function normalizeEntry(entry) {
+    if (typeof entry.id !== 'number') {
+        entry.id = generateId();
+    }
+    if (!Array.isArray(entry.interestTags)) {
+        entry.interestTags = [];
+    } else {
+        entry.interestTags = entry.interestTags.map(function (tag) {
+            if (typeof tag === 'string') {
+                return { id: 'custom_' + generateId(), text: tag, detail: '' };
+            }
+            return {
+                id: tag.id || 'custom_' + generateId(),
+                text: tag.text || '',
+                detail: tag.detail || ''
+            };
+        });
+    }
+    entry.dateAdded = entry.dateAdded || new Date().toISOString();
+    entry.dateFinished = entry.dateFinished || null;
+    entry.currentPage = entry.currentPage === undefined ? null : entry.currentPage;
+    entry.totalPages = entry.totalPages === undefined ? null : entry.totalPages;
+    entry.currentChapter = entry.currentChapter === undefined ? null : entry.currentChapter;
+    entry.totalChapters = entry.totalChapters === undefined ? null : entry.totalChapters;
+    entry.like = entry.like === undefined ? null : entry.like;
+    entry.readingNotes = entry.readingNotes || '';
+    entry.afterthought = entry.afterthought || '';
+    entry.finalRating = entry.finalRating === undefined ? null : entry.finalRating;
+    return entry;
 }
 
 function loadFromStorage() {
     try {
         const data = localStorage.getItem(STORAGE_KEY);
         if (data) {
-            entries = JSON.parse(data);
+            entries = JSON.parse(data).map(normalizeEntry);
             renderEntries();
             showToast('List loaded successfully!');
         } else {
@@ -74,15 +193,6 @@ function loadFromStorage() {
         }
     } catch (e) {
         showToast('Failed to load: ' + e.message, true);
-    }
-}
-
-function clearStorage() {
-    if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
-        localStorage.removeItem(STORAGE_KEY);
-        entries = [];
-        renderEntries();
-        showToast('Data cleared.');
     }
 }
 
@@ -606,9 +716,40 @@ modal.addEventListener('click', function (e) {
     if (e.target === modal) closeModal();
 });
 entryForm.addEventListener('submit', handleSubmit);
-saveBtn.addEventListener('click', saveToStorage);
-loadBtn.addEventListener('click', loadFromStorage);
-clearBtn.addEventListener('click', clearStorage);
+saveBtn.addEventListener('click', async function () {
+    let localOk = true;
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    } catch (e) {
+        localOk = false;
+        console.error('Local save failed:', e);
+    }
+    const dbOk = await pushToSupabase();
+    if (localOk && dbOk) showToast('Saved locally + synced to database!');
+    else if (dbOk) showToast('Synced to database! (local save failed)');
+    else if (localOk) showToast('Saved locally! (DB unavailable)');
+    else showToast('Failed to save!', true);
+});
+
+loadBtn.addEventListener('click', async function () {
+    const dbLoaded = await loadFromSupabase();
+    if (!dbLoaded) loadFromStorage();
+});
+
+clearBtn.addEventListener('click', async function () {
+    if (!confirm('Are you sure you want to clear all data? This cannot be undone.')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    entries = [];
+    renderEntries();
+    const dbCleared = await clearSupabase();
+    showToast(dbCleared ? 'Data cleared (local + database).' : 'Data cleared locally (DB unavailable).');
+});
+
+const syncBtn = document.getElementById('syncBtn');
+syncBtn.addEventListener('click', async function () {
+    const ok = await pushToSupabase();
+    if (ok) showToast('Synced ' + entries.length + ' entries to database!');
+});
 
 sortSelect.addEventListener('change', function () {
     currentSort = this.value;
@@ -638,5 +779,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('.tag-dropdown:not(.hidden)').forEach(d => d.classList.add('hidden'));
     });
 
-    loadFromStorage();
+    loadFromSupabase().then(function (dbLoaded) {
+        if (!dbLoaded) loadFromStorage();
+    });
 });
